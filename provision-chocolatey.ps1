@@ -10,8 +10,7 @@ trap {
 
 # see https://community.chocolatey.org/packages/chocolatey
 # renovate: datasource=nuget:chocolatey depName=chocolatey
-$chocolateyVersion = '2.3.0'
-$env:chocolateyVersion = $chocolateyVersion
+$env:chocolateyVersion = '2.4.1'
 
 PowerShell -Command "Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')"
 if ($LASTEXITCODE) {

@@ -1,6 +1,6 @@
 # see https://github.com/hashicorp/terraform
 terraform {
-  required_version = "1.9.7"
+  required_version = "1.10.3"
   required_providers {
     # see https://registry.terraform.io/providers/hashicorp/random
     random = {
@@ -17,7 +17,7 @@ terraform {
     # see https://registry.terraform.io/providers/hashicorp/azurerm
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "4.3.0"
+      version = "4.14.0"
     }
   }
 }
