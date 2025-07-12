@@ -2,7 +2,7 @@ packer {
   required_plugins {
     # see https://github.com/hashicorp/packer-plugin-azure
     azure = {
-      version = "2.2.0"
+      version = "2.3.3"
       source  = "github.com/hashicorp/azure"
     }
   }

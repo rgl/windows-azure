@@ -32,18 +32,21 @@ function Install-ZippedApplication($destinationPath, $name, $url, $expectedHash,
     if ($actualHash -ne $expectedHash) {
         throw "$name downloaded from $url to $localZipPath has $actualHash hash that does not match the expected $expectedHash"
     }
+    if (Test-Path $destinationPath) {
+        Remove-Item -Recurse -Force $destinationPath
+    }
     [IO.Compression.ZipFile]::ExtractToDirectory($localZipPath, $destinationPath)
     Remove-Item $localZipPath
 }
 function Install-Rsync {
     # see https://github.com/rgl/rsync-vagrant/releases
     # renovate: datasource=github-releases depName=rgl/rsync-vagrant
-    $version = '3.3.0-20241205'
+    $version = '3.4.1-20250710'
     Install-ZippedApplication `
         $rsyncHome `
         rsync `
         "https://github.com/rgl/rsync-vagrant/releases/download/v$version/rsync-vagrant-$version.zip" `
-        69e065a7e4c045e94d019d211bf76b878ab4300ed006bfc11b8a007340b6f439
+        a2718a9d3751612c47d05dea1f0a05b36e9719049c11521c90a3640fa38da330
     [Environment]::SetEnvironmentVariable(
         'PATH',
         "$([Environment]::GetEnvironmentVariable('PATH', 'Machine'));$rsyncHome",
@@ -53,12 +56,12 @@ function Install-Rsync {
 function Install-OpenSshBinaries {
     # see https://github.com/PowerShell/Win32-OpenSSH/releases
     # renovate: datasource=github-releases depName=PowerShell/Win32-OpenSSH
-    $version = '9.8.1.0p1-Preview'
+    $version = '9.8.3.0p2-Preview'
     Install-ZippedApplication `
         $openSshHome `
         OpenSSH `
         "https://github.com/PowerShell/Win32-OpenSSH/releases/download/v$version/OpenSSH-Win64.zip" `
-        c7a1369cd73c8165be00c66e90291c4dd67784de7c3aa3af18c68ebedffa6ea9
+        0ca131f3a78f404dc819a6336606caec0db1663a692ccc3af1e90232706ada54
     Push-Location $openSshHome
     Move-Item OpenSSH-Win64\* .
     Remove-Item OpenSSH-Win64
@@ -84,13 +87,11 @@ Install-OpenSshBinaries
 if (Test-Path $openSshConfigHome) {
     Remove-Item -Recurse -Force $openSshConfigHome
 }
-# install the service.
-&"$openSshHome\install-sshd.ps1" -Confirm:$false
-# start the service (it will create the default configuration and host keys).
-Start-Service sshd
-Stop-Service sshd
-Start-Sleep -Seconds 5
-# modify the configuration.
+# modify the default configuration.
+# NB sshd, at startup, if it does not already exists (as its the case of this
+#    initial installation), will copy this file to
+#    $openSshConfigHome\sshd_config.
+# see https://github.com/PowerShell/openssh-portable/blob/v9.8.3.0/contrib/win32/win32compat/wmain_sshd.c#L152-L156
 $sshdConfig = Get-Content -Raw "$openSshHome\sshd_config_default"
 # Configure the Administrators group to also use the ~/.ssh/authorized_keys file.
 # see https://github.com/PowerShell/Win32-OpenSSH/issues/1324
@@ -104,7 +105,37 @@ $sshdConfig = $sshdConfig `
 # see https://docs.microsoft.com/en-us/powershell/scripting/learn/remoting/ssh-remoting-in-powershell-core?view=powershell-7.4
 $sshdConfig = $sshdConfig `
     -replace '(?m)^(Subsystem\s+sftp\s+.+)',"`$1`nSubsystem`tpowershell`tC:/Progra~1/PowerShell/7/pwsh.exe -nol -sshs"
-Set-Content -Encoding ascii "$openSshConfigHome\sshd_config" $sshdConfig
+Set-Content `
+    -Encoding ascii `
+    -NoNewline `
+    -Path "$openSshHome\sshd_config_default" `
+    -Value $sshdConfig
+# install the service.
+&"$openSshHome\install-sshd.ps1" -Confirm:$false
+# start the service (it will create the configuration and host keys).
+Start-Service sshd
+# wait for all the files to be created.
+while ($true) {
+    $pendingFiles = @(
+        ,'ssh_host_ecdsa_key.pub'
+        ,'ssh_host_ecdsa_key'
+        ,'ssh_host_ed25519_key.pub'
+        ,'ssh_host_ed25519_key'
+        ,'ssh_host_rsa_key.pub'
+        ,'ssh_host_rsa_key'
+        ,'sshd_config'
+        ,'sshd.pid'
+    ) | Where-Object {
+        $filePath = "$openSshConfigHome\$_"
+        !((Test-Path $filePath) -and (Get-Item $filePath).Length)
+    }
+    if (!$pendingFiles) {
+        break
+    }
+    Start-Sleep -Seconds 5
+}
+Start-Sleep -Seconds 15
+Stop-Service sshd
 
 Write-Host 'Setting the host file permissions...'
 &"$openSshHome\FixHostFilePermissions.ps1" -Confirm:$false

@@ -22,10 +22,10 @@ $env:POWERSHELL_UPDATECHECK = 'Off'
 
 # install powershell lts.
 # see https://github.com/PowerShell/PowerShell/releases
-# renovate: datasource=github-releases depName=PowerShell/PowerShell
-$archiveVersion = '7.4.6'
+# renovate: datasource=github-releases depName=PowerShell/PowerShell extractVersion=^v(?<version>7\.4\..+)
+$archiveVersion = '7.4.11'
 $archiveUrl = "https://github.com/PowerShell/PowerShell/releases/download/v$archiveVersion/PowerShell-$archiveVersion-win-x64.msi"
-$archiveHash = 'ed331a04679b83d4c013705282d1f3f8d8300485eb04c081f36e11eaf1148bd0'
+$archiveHash = '9579011c463a3ad6abf890736a97e2fbba9a7b4e09ce851576ccf263e15bdc97'
 $archiveName = Split-Path -Leaf $archiveUrl
 $archivePath = "$env:TEMP\$archiveName"
 
@@ -33,13 +33,16 @@ Write-Host "Downloading $archiveName..."
 (New-Object Net.WebClient).DownloadFile($archiveUrl, $archivePath)
 $archiveActualHash = (Get-FileHash $archivePath -Algorithm SHA256).Hash
 if ($archiveHash -ne $archiveActualHash) {
-    throw "$archiveName downloaded from $archiveUrl to $archivePath has $archiveActualHash hash witch does not match the expected $archiveHash"
+    throw "$archiveName downloaded from $archiveUrl to $archivePath has $archiveActualHash hash which does not match the expected $archiveHash"
 }
 
 Write-Host "Installing $archiveName..."
+# see https://learn.microsoft.com/en-us/powershell/scripting/install/microsoft-update-faq?view=powershell-7.4#can-i-enable-these-update-options-from-the-command-line-or-in-a-script
 msiexec /i $archivePath `
     /qn `
     /L*v "$archivePath.log" `
+    USE_MU=0 `
+    ENABLE_MU=0 `
     | Out-String -Stream
 if ($LASTEXITCODE) {
     throw "$archiveName installation failed with exit code $LASTEXITCODE. See $archivePath.log."
